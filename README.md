@@ -6,7 +6,7 @@
 
 [![Get SDK](https://img.shields.io/badge/Get%20SDK-blue?style=for-the-badge)](https://github.com/oncabaret/anon-sdk)
 [![View Docs](https://img.shields.io/badge/View%20Docs-green?style=for-the-badge)](#getting-started)
-[![Talk to Sales](https://img.shields.io/badge/Talk%20to%20Sales-orange?style=for-the-badge)](mailto:sales@oncabaret.com)
+[![Talk to Sales](https://img.shields.io/badge/Talk%20to%20Sales-orange?style=for-the-badge)](mailto:sales-sdk+team@oncabaaret.com)
 
 ---
 
@@ -237,7 +237,7 @@ const audienceSegment = await AnonSDK.getAudienceSegment();
 | **🚀 Download SDK** | Get immediate access to our SDK | [GitHub Repository](https://github.com/oncabaret/anon-sdk) |
 | **📋 Join the Beta** | Early access to new features | [Beta Waitlist](https://forms.oncabaret.com/beta) |
 | **💬 Talk to Sales** | Custom enterprise solutions | [Schedule Call](https://calendly.com/oncabaret/demo) |
-| **📧 Contact Us** | Questions or custom integrations | [sales@oncabaret.com](mailto:sales@oncabaret.com) |
+| **📧 Contact Us** | Questions or custom integrations | [sales-sdk+team@oncabaaret.com](mailto:sales-sdk+team@oncabaaret.com) |
 
 ### Support & Community
 - **📞 Support**: [support@oncabaret.com](mailto:support@oncabaret.com)
