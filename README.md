@@ -248,7 +248,9 @@ const audienceSegment = await AnonSDK.getAudienceSegment();
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the OnCabaret Commercial License - see the [LICENSE](LICENSE) file for details.
+
+**⚠️ API Key Required**: This SDK requires a valid API Key from OnCabaret to function. [Get your API Key here](https://oncabaret.com/api-access).
 
 ## 🏢 About OnCabaret
 

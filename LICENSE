@@ -1,0 +1,109 @@
+ANON INTENT GRAPH SDK COMMERCIAL LICENSE
+
+Copyright (c) 2024 OnCabaret, Inc.
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. DEFINITIONS
+
+"License" shall mean the terms and conditions for use, reproduction, and 
+distribution as defined by this document.
+
+"Licensor" shall mean OnCabaret, Inc.
+
+"You" (or "Your") shall mean an individual or Legal Entity exercising 
+permissions granted by this License.
+
+"Software" shall mean the Anon Intent Graph SDK and related documentation 
+files provided by Licensor.
+
+"API Key" shall mean a unique authentication token provided by Licensor 
+that enables access to the Software's functionality.
+
+2. GRANT OF LICENSE
+
+Subject to the terms and conditions of this License, Licensor hereby grants 
+You a limited, non-exclusive, non-transferable license to use the Software, 
+provided that:
+
+a) You have obtained a valid API Key from Licensor through official channels;
+b) Your use of the Software is in compliance with the terms of service 
+   associated with Your API Key;
+c) You do not redistribute, sublicense, or transfer the Software or Your 
+   API Key to any third party without prior written consent from Licensor.
+
+3. API KEY REQUIREMENT
+
+THE SOFTWARE REQUIRES A VALID API KEY TO FUNCTION. Use of the Software 
+without a valid API Key is strictly prohibited and constitutes a breach 
+of this License.
+
+To obtain an API Key:
+- Visit: https://oncabaret.com/api-access
+- Contact: sales@oncabaret.com
+- Or schedule a consultation: https://calendly.com/oncabaret/demo
+
+4. RESTRICTIONS
+
+You may NOT:
+a) Use the Software without a valid API Key;
+b) Reverse engineer, decompile, or disassemble the Software;
+c) Remove or alter any proprietary notices or labels on the Software;
+d) Use the Software for any unlawful purpose or in violation of any 
+   applicable laws or regulations;
+e) Share, distribute, or transfer Your API Key to unauthorized parties;
+f) Attempt to circumvent the API Key authentication mechanism.
+
+5. DATA AND PRIVACY
+
+Your use of the Software is subject to OnCabaret's Privacy Policy and 
+Data Processing Agreement. The Software is designed to collect only 
+anonymous behavioral data and does not process personally identifiable 
+information (PII).
+
+6. SUPPORT AND UPDATES
+
+Support and updates are provided exclusively to holders of valid API Keys 
+in accordance with the support terms associated with Your API Key tier.
+
+7. TERMINATION
+
+This License is effective until terminated. Your rights under this License 
+will terminate automatically without notice if You fail to comply with any 
+term(s) of this License, including but not limited to using the Software 
+without a valid API Key.
+
+8. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+9. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+DEALINGS IN THE SOFTWARE.
+
+10. GOVERNING LAW
+
+This License shall be governed by and construed in accordance with the 
+laws of the State of Delaware, United States, without regard to its 
+conflict of law provisions.
+
+11. CONTACT INFORMATION
+
+For licensing inquiries, API Key requests, or other questions:
+
+OnCabaret, Inc.
+Email: legal@oncabaret.com
+Sales: sales@oncabaret.com
+Website: https://oncabaret.com
+
+---
+
+BY USING THE SOFTWARE, YOU ACKNOWLEDGE THAT YOU HAVE READ THIS LICENSE, 
+UNDERSTAND IT, AND AGREE TO BE BOUND BY ITS TERMS AND CONDITIONS.
+
+Last Updated: December 2024 
