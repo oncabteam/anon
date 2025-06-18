@@ -1,404 +1,468 @@
 # VibeMesh Universal SDK
 
-A lightweight, platform-agnostic analytics and intent tracking SDK for the VibeMesh ecosystem. Build anonymous intent graphs across React Native, Web, Node.js, and digital billboard platforms.
+A comprehensive, privacy-first analytics SDK that works seamlessly across all platforms with **automatic event detection**. Just initialize with your API key and start tracking!
 
-## 🚀 Features
+## 🚀 **Plug-and-Play Analytics**
 
-- **Universal Compatibility**: Works across React Native, Web browsers, Node.js, and DOOH systems
-- **Anonymous by Design**: Privacy-first with anonymous UUIDs only
-- **Offline-First**: Automatic offline storage and sync when online
-- **Lightweight**: ~2-3KB gzipped for web platforms
-- **Geo-Aware**: Optional location context with minimal permissions
-- **Event Batching**: Efficient network usage with configurable batch sizes
-- **Auto-Tracking**: Web SDK includes automatic page view, click, and scroll tracking
-- **Consent Management**: Built-in opt-out/opt-in functionality
+```javascript
+// Web - Automatic tracking starts immediately
+VibeMesh.init({ clientId: 'your-api-key' });
 
-## 📦 Installation
+// React Native - Auto-tracks screens, taps, and interactions
+await VibeMesh.init({ clientId: 'your-api-key' });
 
-### React Native
+// iOS - Automatic screen and button tracking
+try await VibeMesh.shared.initialize(config: config)
 
-```bash
-npm install @vibemesh/react-native
-# Required peer dependencies
-npm install @react-native-async-storage/async-storage @react-native-community/netinfo uuid
-# Optional: for location tracking
-npm install @react-native-community/geolocation
+// Android - Auto-tracks activities and interactions
+VibeMesh.instance.initialize(context, config)
 ```
 
-### Web
+**That's it!** No manual tracking code needed. The SDK automatically detects and tracks:
+- **Page/Screen Views** - Every page visit and screen change
+- **User Interactions** - Clicks, taps, form submissions, scrolling
+- **E-commerce Events** - Add to cart, checkout, purchases
+- **Media Engagement** - Video play/pause, download tracking
+- **Search Behavior** - Search queries and interactions
+- **Performance Metrics** - Page load times, error tracking
 
-#### Via CDN
+## 🌍 **Universal Platform Support**
+
+| Platform | Package | Auto-Tracking | Size |
+|----------|---------|---------------|------|
+| **Web** | `npm install @vibemesh/web-sdk` | ✅ Comprehensive | 2.3KB gzipped |
+| **React Native** | `npm install @vibemesh/react-native-sdk` | ✅ Full mobile UX | 45KB |
+| **iOS Native** | CocoaPods, SPM | ✅ UIKit swizzling | 180KB |
+| **Android Native** | Gradle, Maven | ✅ Activity lifecycle | 220KB |
+| **Node.js/DOOH** | `npm install @vibemesh/node-sdk` | ✅ System events | 28KB |
+
+## 🔐 **Privacy-First Design**
+
+- **Anonymous by default** - Uses `anon-{uuid}` identifiers
+- **No PII collection** - Personal data never tracked
+- **GDPR/CCPA compliant** - Built-in consent management
+- **Client-side storage** - Data stays local until sync
+- **TTL enforcement** - Automatic data expiration
+- **Opt-out API** - Users control their privacy
+
+## ⚡ **Quick Start Examples**
+
+### Web (Automatic Everything)
 ```html
-<script src="https://cdn.vibemesh.io/sdk.min.js"></script>
-<script>
-  window.vibemesh.init({ clientId: 'YOUR_CLIENT_ID' });
-</script>
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Auto-initialize via meta tag -->
+  <meta name="vibemesh-api-key" content="your-api-key">
+  <script src="https://cdn.vibemesh.io/v1/vibemesh.min.js"></script>
+</head>
+<body>
+  <!-- All clicks, forms, videos automatically tracked -->
+  <button>Add to Cart</button> <!-- Tracked as e-commerce event -->
+  <form><input type="search" placeholder="Search..."></form> <!-- Auto search tracking -->
+  <video src="demo.mp4"></video> <!-- Video engagement tracked -->
+</body>
+</html>
 ```
 
-#### Via NPM
-```bash
-npm install @vibemesh/web
+### React Native (Zero Configuration)
+```jsx
+import VibeMesh from '@vibemesh/react-native-sdk';
+
+// Initialize once in App.js
+await VibeMesh.init({ clientId: 'your-api-key' });
+
+// All screens and interactions automatically tracked
+export default function ProductScreen({ productId }) {
+  return (
+    <ScrollView> {/* Scroll depth tracked */}
+      <TouchableOpacity> {/* Tap automatically tracked */}
+        <Text>Add to Cart</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
 ```
 
-### Node.js (Digital Billboards/DOOH)
+### iOS Native (Swizzled Auto-Tracking)
+```swift
+import VibeMesh
 
-```bash
-npm install @vibemesh/node
-```
-
-## 🔧 Quick Start
-
-### React Native
-
-```javascript
-import VibeMesh from '@vibemesh/react-native';
-
-// Initialize in your App component
-await VibeMesh.init({
-  clientId: 'your-client-id',
-  endpoint: 'https://api.vibemesh.io/events',
-  geo: true, // Enable location tracking
-});
-
-// Track events
-await VibeMesh.trackVenueView({
-  id: 'venue_123',
-  name: 'Blue Note Jazz Club',
-  tags: ['jazz', 'live_music'],
-});
-```
-
-### Web
-
-```javascript
-import VibeMesh from '@vibemesh/web';
-
-// Initialize
-await VibeMesh.init({
-  clientId: 'your-client-id',
-  endpoint: 'https://api.vibemesh.io/events',
-});
-
-// Enable automatic tracking
-VibeMesh.enableAutoTracking({
-  clicks: true,
-  scrollDepth: true,
-  pageViews: true,
-});
-
-// Track custom events
-await VibeMesh.track('view_venue', {
-  venue_id: 'venue_123',
-  venue_name: 'Blue Note',
-});
-```
-
-### Node.js (Digital Billboards)
-
-```javascript
-const { VibeMeshNode } = require('@vibemesh/node');
-
-const vibeMesh = new VibeMeshNode();
-
-await vibeMesh.init({
-  clientId: 'billboard-client-id',
-  deviceId: 'billboard-001',
-  locationId: 'times-square-north',
-  staticLocation: { lat: 40.7580, lng: -73.9855 },
-});
-
-// Track billboard impressions
-await vibeMesh.trackImpression({
-  id: 'ad_001',
-  name: 'Jazz Festival Promo',
-  duration: 30000,
-}, 15); // 15 estimated viewers
-```
-
-## 📊 Event Types
-
-### Core Events
-- `view_venue` - User viewed a venue
-- `view_event` - User viewed an event  
-- `search` - User performed a search
-- `tag_interaction` - User interacted with tags
-- `favorite` - User favorited content
-- `map_move` - Map interaction events
-
-### Web-Specific Events
-- `page_view` - Page view tracking
-- `click` - Element click tracking
-- `scroll_depth` - Scroll depth milestones
-- `form_submit` - Form submission tracking
-
-### Billboard/DOOH Events
-- `impression` - Content impression
-- `dwell_time` - Viewer dwell time
-- `content_start` - Content playback start
-- `content_end` - Content playback end
-- `interaction` - QR/NFC interactions
-
-## 🔧 Platform-Specific APIs
-
-### React Native
-
-```javascript
-// High-level tracking methods
-await VibeMesh.trackVenueView(venue, geoContext);
-await VibeMesh.trackEventView(event, geoContext);
-await VibeMesh.trackSearch(query, results, filters);
-await VibeMesh.trackMapInteraction('zoom', mapState);
-await VibeMesh.trackTagInteraction(tag, 'click');
-await VibeMesh.trackFavorite(venue, 'venue');
-await VibeMesh.trackShare(event, 'event', 'twitter');
-```
-
-### Web
-
-```javascript
-// Auto-tracking
-VibeMesh.enableAutoTracking({
-  clicks: true,
-  scrollDepth: true,
-  formSubmits: true,
-  pageViews: true,
-});
-
-// Manual tracking
-await VibeMesh.trackPageView();
-await VibeMesh.trackClick(element, context);
-await VibeMesh.trackFormSubmit(form);
-await VibeMesh.trackScrollDepth(75);
-await VibeMesh.trackMediaInteraction(video, 'play');
-```
-
-### Node.js/DOOH
-
-```javascript
-// Billboard-specific tracking
-await vibeMesh.trackImpression(content, viewerCount);
-await vibeMesh.trackDwellTime(timeMs, viewerCount);
-await vibeMesh.trackContentStart(content);
-await vibeMesh.trackContentEnd(content, actualDuration);
-await vibeMesh.trackInteraction('qr_scan', details);
-await vibeMesh.trackSystemEvent('error', errorDetails);
-```
-
-## 🌍 Geographic Context
-
-All platforms support optional geographic context:
-
-```javascript
-const geoContext = {
-  lat: 40.7128,
-  lng: -74.0060,
-  city: 'New York',
-  neighborhood: 'SoHo'
-};
-
-await VibeMesh.track('view_venue', context, geoContext);
-```
-
-### React Native Geolocation
-
-```javascript
-// Enable in init
-await VibeMesh.init({
-  clientId: 'your-client-id',
-  geo: true, // Automatically get location for events
-});
-```
-
-### Web Geolocation
-
-```javascript
-// Browser will prompt for permission
-await VibeMesh.init({
-  clientId: 'your-client-id',
-  geo: true,
-});
-```
-
-### Static Location (Node.js)
-
-```javascript
-await vibeMesh.init({
-  clientId: 'billboard-client-id',
-  staticLocation: { lat: 40.7580, lng: -73.9855 },
-});
-```
-
-## 🔒 Privacy & Consent
-
-### Opt-Out/Opt-In
-
-```javascript
-// Check status
-if (VibeMesh.isOptedOut()) {
-  // User has opted out
+// AppDelegate.swift
+func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    let config = VibeMesh.Configuration(
+        apiKey: "your-api-key",
+        enableAutoTracking: true
+    )
+    
+    Task {
+        try await VibeMesh.shared.initialize(config: config)
+    }
+    
+    return true
 }
 
-// Opt out
-await VibeMesh.optOut();
-
-// Opt back in
-await VibeMesh.optIn();
+// All ViewControllers and UIButton taps automatically tracked
+class ProductViewController: UIViewController {
+    // Screen view automatically tracked when viewDidAppear is called
+    // Button taps automatically tracked via swizzling
+}
 ```
 
-### Anonymous by Design
+### Android Native (Lifecycle Auto-Tracking)
+```kotlin
+import io.vibemesh.sdk.VibeMesh
 
-- All user identification uses anonymous UUIDs
-- No PII is ever collected
-- Geographic data is optional and requires explicit permission
-- Events auto-expire based on TTL (30-365 days)
+// Application.kt
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        
+        lifecycleScope.launch {
+            val config = VibeMesh.Configuration(
+                apiKey = "your-api-key",
+                enableAutoTracking = true
+            )
+            
+            VibeMesh.instance.initialize(this@MyApplication, config)
+        }
+    }
+}
 
-## 🔄 Offline Support
-
-The SDK automatically handles offline scenarios:
-
-```javascript
-// Events are stored locally when offline
-await VibeMesh.track('view_venue', context); // Stored locally
-
-// Automatically synced when back online
-// Network state changes trigger sync attempts
-
-// Manual flush
-await VibeMesh.flush();
-
-// Check pending events
-const pendingCount = VibeMesh.getPendingEventsCount();
+// All Activities and Button clicks automatically tracked
+class ProductActivity : AppCompatActivity() {
+    // Screen views automatically tracked via activity lifecycle
+    // Button clicks automatically tracked via click listeners
+}
 ```
 
-## ⚙️ Configuration
+## 📊 **Automatic Event Types**
 
-### Full Configuration Options
+### Web Auto-Tracking
+| Event Type | Triggered When | Data Captured |
+|------------|----------------|---------------|
+| `page_view` | Page loads, SPA navigation | URL, title, referrer, viewport |
+| `click` | Any element clicked | Element info, coordinates, modifiers |
+| `scroll_depth` | 25%, 50%, 75%, 100% scrolled | Percentage, timing, page height |
+| `form_interaction` | Form submitted/focused | Form structure (no values) |
+| `video_interaction` | Play/pause/milestone | Duration, position, milestones |
+| `download` | File download links | File type, name, source |
+| `search` | Search forms/inputs | Query (anonymized) |
+| `add_to_cart` | E-commerce patterns | Product info from DOM |
+| `javascript_error` | Unhandled errors | Error details for debugging |
+| `page_performance` | Load complete | Timing metrics |
+
+### Mobile Auto-Tracking
+| Event Type | Platform | Triggered When | Data Captured |
+|------------|----------|----------------|---------------|
+| `screen_view` | Both | Screen/Activity shown | Screen name, class, timing |
+| `button_tap` | Both | Button/TouchableOpacity pressed | Button text, screen context |
+| `app_foreground` | Both | App becomes active | Session info, duration |
+| `app_background` | Both | App goes to background | Session duration |
+| `gesture` | React Native | Swipe, pinch, long press | Gesture type, coordinates |
+| `navigation` | React Native | Screen navigation | From/to screens, params |
+| `text_input` | React Native | TextInput interactions | Input type, length (no content) |
+
+### Node.js/DOOH Auto-Tracking
+| Event Type | Triggered When | Data Captured |
+|------------|----------------|---------------|
+| `billboard_impression` | Content displayed | Duration, content ID, location |
+| `dwell_time` | Presence detected | Duration, time of day |
+| `content_rotation` | Content changes | Previous/next content, timing |
+| `system_health` | Periodic health check | CPU, memory, storage, network |
+
+## 🛠 **Manual Tracking (When Needed)**
+
+For custom business events, use the manual tracking API:
 
 ```javascript
-await VibeMesh.init({
-  clientId: 'your-client-id',           // Required
-  endpoint: 'https://api.vibemesh.io/events', // API endpoint
-  geo: false,                           // Enable geolocation
-  batchSize: 50,                        // Events per batch
-  flushInterval: 30000,                 // Auto-flush interval (ms)
-  debugMode: false,                     // Enable debug logging
-  
-  // Platform-specific options
-  storageDir: './data',                 // Node.js storage directory
-  deviceId: 'device-001',               // Node.js device identifier
-  locationId: 'location-001',           // Node.js location identifier
-  staticLocation: { lat: 0, lng: 0 },   // Node.js static location
+// High-level convenience methods (all platforms)
+await VibeMesh.trackPurchase({
+  transactionId: 'txn_123',
+  amount: 29.99,
+  currency: 'USD',
+  items: [{ name: 'Concert Ticket', price: 29.99 }]
+});
+
+await VibeMesh.trackSearch({
+  query: 'jazz clubs',
+  resultCount: 5,
+  filters: { location: 'SF', category: 'music' }
+});
+
+// Custom events with your own data
+await VibeMesh.track('venue_view', {
+  venue_id: 'venue_123',
+  venue_name: 'Blue Note',
+  category: 'jazz_club'
 });
 ```
 
-## 📈 Anonymous Intent Graph
+## 🎯 **Platform-Specific Features**
 
-VibeMesh builds an anonymous intent graph to understand user behavior while maintaining privacy:
-
-### Node Structure
-
-```
-User Node (anon-uuid-123)
-├── viewed:venue:venue_456 (weight: 1, ttl: 180d)
-├── searched:"jazz clubs" (weight: 1, ttl: 90d)
-├── favorited:event:event_789 (weight: 5, ttl: 365d)
-└── interacted:tag:music:jazz (weight: 1, ttl: 180d)
-```
-
-### Event Weights & TTL
-
-- **Views**: Weight 1, TTL 180 days
-- **Favorites**: Weight 5, TTL 365 days  
-- **Searches**: Weight 1, TTL 90 days
-- **Map Interactions**: Weight 1, TTL 30 days
-- **Impressions**: Weight 1, TTL 30 days
-
-## 🔧 Advanced Usage
-
-### Batch Tracking
-
+### Enhanced Web Tracking
 ```javascript
-const events = [
-  { eventType: 'view_venue', context: { venue_id: '1' } },
-  { eventType: 'view_venue', context: { venue_id: '2' } },
-  { eventType: 'search', context: { query: 'jazz' } },
-];
-
-await VibeMesh.trackBatch(events);
-```
-
-### Custom Events
-
-```javascript
-await VibeMesh.track('custom_event', {
-  custom_field: 'value',
-  category: 'user_action',
-  metadata: { source: 'feature_flag' },
+VibeMesh.init({
+  clientId: 'your-api-key',
+  autoTracking: {
+    pageViews: true,         // SPA navigation
+    clicks: true,            // All clicks with context
+    scrollDepth: true,       // Engagement depth
+    formSubmits: true,       // Form completion
+    videoInteractions: true, // Media engagement
+    downloads: true,         // File downloads
+    linkClicks: true,        // External links
+    errorTracking: true,     // JavaScript errors
+    performanceTracking: true, // Load times
+    searchTracking: true,    // Search behavior
+    ecommerce: true          // Shopping patterns
+  }
 });
 ```
 
-### Session Management
+### React Native Capabilities
+```jsx
+// Automatic gesture tracking
+<PanGestureHandler> {/* Tracked automatically */}
+  <PinchGestureHandler> {/* Multi-touch tracked */}
+    <TapGestureHandler> {/* All gestures captured */}
+      <AnimatedView />
+    </TapGestureHandler>
+  </PinchGestureHandler>
+</PanGestureHandler>
 
-```javascript
-// Get current session info
-const sessionId = VibeMesh.getSessionId();
-const userId = VibeMesh.getUserId();
+// Navigation auto-tracking
+import { NavigationContainer } from '@react-navigation/native';
 
-// Sessions automatically created on init
-// Session end tracked on app backgrounding
+<NavigationContainer
+  onStateChange={(state) => {
+    // Automatically tracked by VibeMesh
+  }}
+>
+  <Stack.Navigator>
+    <Stack.Screen name="Home" component={HomeScreen} />
+    <Stack.Screen name="Product" component={ProductScreen} />
+  </Stack.Navigator>
+</NavigationContainer>
 ```
 
-## 🔍 Debugging
+### iOS Advanced Features
+```swift
+// Automatic location context (with permission)
+let config = VibeMesh.Configuration(
+    apiKey: "your-api-key",
+    enableGeolocation: true,    // Adds location to events
+    enableAutoTracking: true,   // UIKit swizzling
+    debugMode: true            // Console logging
+)
 
-### Enable Debug Mode
+// Custom UTM tracking
+await VibeMesh.shared.track("campaign_view", context: [
+    "utm_source": "instagram",
+    "utm_campaign": "summer_sale",
+    "utm_medium": "social"
+])
+```
+
+### Android Advanced Features
+```kotlin
+val config = VibeMesh.Configuration(
+    apiKey = "your-api-key",
+    enableGeolocation = true,   // Location context
+    enableAutoTracking = true,  // Activity/Fragment tracking
+    batchSize = 50,            // Network optimization
+    flushInterval = 30000L     // 30 second sync
+)
+
+// Fragment auto-tracking
+class ProductFragment : Fragment() {
+    // onResume automatically tracked
+    // Button clicks automatically tracked via view tree
+}
+```
+
+## 📈 **Data Format & Pipeline**
+
+All events follow a standardized format across platforms:
+
+```json
+{
+  "event_id": "evt_123",
+  "event_type": "screen_view",
+  "entity_id": "product_456",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uuid": "anon-abc123",
+  "session_id": "ses_789",
+  "client_id": "your-api-key",
+  "platform": "ios",
+  "context": {
+    "screen_name": "ProductViewController",
+    "product_id": "prod_123",
+    "category": "electronics"
+  },
+  "geo_context": {
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "accuracy": 100
+  },
+  "tags": ["mobile", "product"],
+  "ttl": 15552000
+}
+```
+
+### Event Pipeline
+```
+Mobile/Web App → VibeMesh SDK → Local Storage → Batch Upload → API Gateway → 
+Lambda → Kinesis → S3/DynamoDB → Analytics Dashboard
+```
+
+## 🔧 **Installation**
+
+### Web
+```bash
+# NPM
+npm install @vibemesh/web-sdk
+
+# CDN
+<script src="https://cdn.vibemesh.io/v1/vibemesh.min.js"></script>
+
+# Auto-initialize via meta tag
+<meta name="vibemesh-api-key" content="your-api-key">
+```
+
+### React Native
+```bash
+npm install @vibemesh/react-native-sdk
+cd ios && pod install  # iOS only
+```
+
+### iOS
+```ruby
+# CocoaPods
+pod 'VibeMesh', '~> 1.0'
+
+# Swift Package Manager
+.package(url: "https://github.com/vibemesh/universal-sdk", from: "1.0.0")
+```
+
+### Android
+```gradle
+// build.gradle (app)
+implementation 'io.vibemesh:vibemesh-android:1.0.0'
+```
+
+### Node.js
+```bash
+npm install @vibemesh/node-sdk
+```
+
+## 🏗 **Architecture**
+
+```
+┌─────────────────────────────────────────────────────┐
+│                VibeMesh Universal SDK                │
+├─────────────────────────────────────────────────────┤
+│  📱 Mobile (iOS/Android)    🌐 Web     🖥 Node.js    │
+│  • Auto screen tracking   • Auto clicks  • System   │
+│  • Gesture detection      • Form events  • Billboard │
+│  • App lifecycle          • Video/media  • Health    │
+│  • Location context       • E-commerce   • Content   │
+├─────────────────────────────────────────────────────┤
+│                  Core Features                      │
+│  • Anonymous UUIDs        • Offline Storage         │
+│  • Event Batching         • TTL Management          │
+│  • Privacy Controls       • Network Retry           │
+│  • Geo-aware (opt-in)     • Error Handling          │
+├─────────────────────────────────────────────────────┤
+│                 Platform Adapters                   │
+│  • Storage: localStorage, AsyncStorage, UserDefaults│
+│  • Network: fetch, XMLHttpRequest, URLSession       │
+│  • Lifecycle: DOM events, AppState, UIApplication   │
+└─────────────────────────────────────────────────────┘
+```
+
+## 🎮 **Demo Apps**
+
+Try the SDK immediately:
+
+```bash
+# Web demo
+cd examples/web && open index.html
+
+# React Native demo
+cd examples/react-native && npm start
+
+# iOS demo
+cd examples/ios && open VibeMeshExample.xcodeproj
+
+# Android demo
+cd examples/android && ./gradlew assembleDebug
+```
+
+## 📚 **Migration Guide**
+
+### From OnCabaret Integration
+The Universal SDK is a drop-in replacement with enhanced capabilities:
 
 ```javascript
-await VibeMesh.init({
-  clientId: 'your-client-id',
-  debugMode: true, // Enables console logging
+// Old OnCabaret integration
+OnCabaret.trackVenueView(venueId, venueName);
+
+// New VibeMesh (automatically tracks + manual option)
+await VibeMesh.track('venue_view', {
+  venue_id: venueId,
+  venue_name: venueName,
+  // Auto-added: timestamp, user_id, session_id, geo_context
 });
 ```
 
-### Check SDK Status
-
+### From Google Analytics
 ```javascript
-console.log('Initialized:', VibeMesh.isInitialized);
-console.log('User ID:', VibeMesh.getUserId());
-console.log('Session ID:', VibeMesh.getSessionId());
-console.log('Pending Events:', VibeMesh.getPendingEventsCount());
-console.log('Opted Out:', VibeMesh.isOptedOut());
+// Old GA4
+gtag('event', 'purchase', {
+  transaction_id: '123',
+  value: 29.99,
+  currency: 'USD'
+});
+
+// VibeMesh (privacy-first)
+await VibeMesh.trackPurchase({
+  transactionId: '123',
+  amount: 29.99,
+  currency: 'USD'
+  // No user identification, anonymous by default
+});
 ```
 
-## 📚 Examples
+## 🛡 **Privacy & Compliance**
 
-- [React Native Example App](./examples/react-native/)
-- [Web Demo Page](./examples/web/)
-- [Digital Billboard Simulation](./examples/node-billboard/)
+- **Anonymous-first**: No emails, names, or PII
+- **User control**: Built-in opt-out mechanisms
+- **Data minimization**: Only collect what's needed
+- **Geographic compliance**: GDPR, CCPA, PIPEDA support
+- **Retention policies**: Configurable TTL per event type
+- **Encryption**: HTTPS/TLS for all data transmission
 
-## 🔗 Related Projects
+## 🚀 **Performance**
 
-- [VibeMesh OnCabaret Integration](../vibemesh_examples/)
-- [VibeMesh Analytics Pipeline](../analytics/)
+| Platform | Bundle Size | Init Time | Memory | Battery Impact |
+|----------|-------------|-----------|--------|----------------|
+| Web | 2.3KB gzipped | <50ms | <1MB | Negligible |
+| React Native | 45KB | <100ms | <5MB | Very Low |
+| iOS | 180KB | <200ms | <3MB | Low |
+| Android | 220KB | <150ms | <4MB | Low |
 
-## 📝 License
+## 📞 **Support**
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+- **Documentation**: [docs.vibemesh.io](https://docs.vibemesh.io)
+- **API Reference**: [api.vibemesh.io](https://api.vibemesh.io)
+- **Examples**: [github.com/vibemesh/examples](https://github.com/vibemesh/examples)
+- **Support**: [support@vibemesh.io](mailto:support@vibemesh.io)
 
-## 🤝 Contributing
+## 📄 **License**
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## 🆘 Support
-
-- [Documentation](https://docs.vibemesh.io)
-- [API Reference](https://api.vibemesh.io/docs)
-- [Community Forum](https://community.vibemesh.io)
-- [GitHub Issues](https://github.com/vibemesh/sdk/issues)
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-Built with ❤️ by the VibeMesh team
+**VibeMesh Universal SDK** - Privacy-first analytics that just works. Initialize once, track everything automatically. 🚀

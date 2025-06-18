@@ -1,0 +1,122 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'maven-publish'
+}
+
+android {
+    namespace 'io.vibemesh.sdk'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    
+    kotlinOptions {
+        jvmTarget = '11'
+        freeCompilerArgs += [
+            '-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi',
+            '-opt-in=kotlinx.serialization.ExperimentalSerializationApi'
+        ]
+    }
+    
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+}
+
+dependencies {
+    // Core Android dependencies
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.lifecycle:lifecycle-process:2.7.0'
+    implementation 'androidx.fragment:fragment-ktx:1.6.2'
+    
+    // Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    
+    // Serialization
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2'
+    
+    // Networking
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    
+    // Testing
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
+    testImplementation 'io.mockk:mockk:1.13.8'
+    
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+// Publishing configuration
+publishing {
+    publications {
+        release(MavenPublication) {
+            from components.release
+            
+            groupId = 'io.vibemesh'
+            artifactId = 'vibemesh-android'
+            version = '1.0.0'
+            
+            pom {
+                name = 'VibeMesh Android SDK'
+                description = 'Universal analytics SDK with automatic event tracking and privacy-first design for Android'
+                url = 'https://github.com/vibemesh/universal-sdk'
+                
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                
+                developers {
+                    developer {
+                        id = 'vibemesh'
+                        name = 'VibeMesh Team'
+                        email = 'support@vibemesh.io'
+                    }
+                }
+                
+                scm {
+                    connection = 'scm:git:git://github.com/vibemesh/universal-sdk.git'
+                    developerConnection = 'scm:git:ssh://github.com:vibemesh/universal-sdk.git'
+                    url = 'https://github.com/vibemesh/universal-sdk/tree/main'
+                }
+            }
+        }
+    }
+    
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/vibemesh/universal-sdk"
+            credentials {
+                username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") ?: System.getenv("TOKEN")
+            }
+        }
+    }
+}
