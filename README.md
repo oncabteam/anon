@@ -223,7 +223,6 @@ const audienceSegment = await AnonSDK.getAudienceSegment();
 - **[📖 Full Documentation](https://github.com/oncabteam/anon)**
 - **[🛠️ API Reference](https://github.com/oncabteam/anon)**
 - **[💻 Code Examples](https://github.com/oncabteam/anon)**
-- **[🎥 Video Tutorials](https://www.youtube.com/oncabaret)**
 - **[❓ FAQ](https://github.com/oncabteam/anon)**
 
 ---
