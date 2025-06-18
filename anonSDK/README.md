@@ -36,7 +36,64 @@ VibeMesh.instance.initialize(context, config)
 | **Android Native** | Gradle, Maven | ✅ Activity lifecycle | 220KB |
 | **Node.js/DOOH** | `npm install @vibemesh/node-sdk` | ✅ System events | 28KB |
 
-## 🔐 **Privacy-First Design**
+## � **LiDAR Billboard Extension** 🆕
+
+Transform any digital billboard into an intelligent, audience-aware advertising platform with **real-time crowd analytics** and **privacy-first design**.
+
+### **Features**
+- 🎯 **Real-time Crowd Detection** - Accurate people counting and clustering
+- 📊 **Engagement Analysis** - Attention tracking and dwell time measurement
+- 🌊 **Flow Pattern Analysis** - Pedestrian movement and direction tracking
+- 🚨 **Anomaly Detection** - Crowd surges, unusual patterns, safety alerts
+- 🔄 **Dynamic Content Optimization** - Automatic content selection based on audience
+- 🔒 **Privacy-First Design** - No facial recognition, anonymous data only
+
+### **Supported Hardware**
+| LiDAR Sensor | Range | Best Use Case | Price Range |
+|--------------|-------|---------------|-------------|
+| **Intel RealSense D455** | 20m | Outdoor Billboards | $300-400 |
+| **Ouster OS1-64** | 120m | Large Outdoor Areas | $8,000+ |
+| **Hesai Pandar QT** | 20m | Premium Automotive | $2,000+ |
+
+### **Quick Start**
+```javascript
+import VibeMeshLiDAR from '@vibemesh/billboard-lidar';
+
+const billboard = new VibeMeshLiDAR();
+
+// Initialize with minimal configuration
+await billboard.initializeLiDAR({
+  apiKey: 'your-api-key',
+  billboardId: 'bb_times_square_001',
+  location: { lat: 40.7580, lng: -73.9855 },
+  lidar: {
+    sensorType: 'intel_realsense_d455',
+    computeUnit: 'jetson_orin'
+  }
+});
+
+// Real-time context-driven content optimization
+const context = billboard.getCurrentContext();
+if (context.clusterCount > 10 && context.engagementScore > 0.7) {
+  displayPremiumContent(); // High engagement detected
+}
+```
+
+### **Use Cases**
+- **Dynamic Content Optimization** - Switch content based on crowd size and engagement
+- **Revenue Optimization** - Maximize ad revenue with targeted content delivery
+- **Safety & Crowd Management** - Detect crowd surges and unusual patterns
+- **Audience Insights** - Real-time analytics for advertising performance
+
+### **Privacy & Compliance**
+- ✅ **No Facial Recognition** - Hardware incapable, never implemented
+- ✅ **Anonymous Data Only** - No personal identifiers collected
+- ✅ **Edge AI Processing** - All inference runs locally on device
+- ✅ **GDPR/CCPA Compliant** - Built-in privacy controls and consent management
+
+**Learn More**: [LiDAR Extension Documentation](./extensions/billboard-lidar/README.md)
+
+## �🔐 **Privacy-First Design**
 
 - **Anonymous by default** - Uses `anon-{uuid}` identifiers
 - **No PII collection** - Personal data never tracked
