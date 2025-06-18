@@ -5,7 +5,7 @@
 **Capture and amplify real-time behavioral signals — on mobile, web, or billboards — without compromising privacy.**
 
 [![Get SDK](https://img.shields.io/badge/Get%20SDK-blue?style=for-the-badge)](https://github.com/oncabaret/anon-sdk)
-[![View Docs](https://img.shields.io/badge/View%20Docs-green?style=for-the-badge)](#getting-started)
+[![View Docs](https://img.shields.io/badge/View%20Docs-green?style=for-the-badge)](https://github.com/oncabteam/anon)
 [![Talk to Sales](https://img.shields.io/badge/Talk%20to%20Sales-orange?style=for-the-badge)](mailto:sales-sdk+team@oncabaaret.com)
 
 ---
@@ -220,11 +220,11 @@ const audienceSegment = await AnonSDK.getAudienceSegment();
 
 ## 📚 Documentation & Resources
 
-- **[📖 Full Documentation](https://docs.oncabaret.com/anon-sdk)**
-- **[🛠️ API Reference](https://docs.oncabaret.com/anon-sdk/api)**
-- **[💻 Code Examples](https://github.com/oncabaret/anon-sdk-examples)**
+- **[📖 Full Documentation](https://github.com/oncabteam/anon)**
+- **[🛠️ API Reference](https://github.com/oncabteam/anon)**
+- **[💻 Code Examples](https://github.com/oncabteam/anon)**
 - **[🎥 Video Tutorials](https://www.youtube.com/oncabaret)**
-- **[❓ FAQ](https://docs.oncabaret.com/anon-sdk/faq)**
+- **[❓ FAQ](https://github.com/oncabteam/anon)**
 
 ---
 
