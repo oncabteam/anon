@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnCabaret Anonymous Intent SDK - Web Example</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .demo-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .demo-section h2 {
+            color: #4c51bf;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: #4c51bf;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #434190;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #38a169;
+        }
+        
+        .form-example {
+            background: #f7fafc;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #4c51bf;
+            box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.1);
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        
+        .status.success {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            color: #22543d;
+        }
+        
+        .status.error {
+            background: #fed7d7;
+            border: 1px solid #feb2b2;
+            color: #742a2a;
+        }
+        
+        .status.info {
+            background: #ebf8ff;
+            border: 1px solid #90cdf4;
+            color: #2a4365;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .metric-card {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #4c51bf;
+        }
+        
+        .metric-label {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        
+        .consent-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #2d3748;
+            color: white;
+            padding: 1rem;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .consent-banner.show {
+            display: block;
+        }
+        
+        .consent-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .privacy-link {
+            color: #90cdf4;
+            text-decoration: none;
+        }
+        
+        .privacy-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎯 Anonymous Intent SDK</h1>
+            <p>Privacy-first behavioral analytics for modern applications</p>
+        </header>
+
+        <!-- Consent Status -->
+        <div class="demo-section">
+            <h2>🔒 Privacy & Consent</h2>
+            <div id="consent-status" class="status info">
+                <strong>Consent Status:</strong> <span id="consent-text">Checking...</span>
+            </div>
+            <div class="buttons">
+                <button class="btn btn-success" onclick="grantConsent()">Grant Consent</button>
+                <button class="btn btn-secondary" onclick="revokeConsent()">Revoke Consent</button>
+            </div>
+        </div>
+
+        <!-- Event Tracking Demo -->
+        <div class="demo-section">
+            <h2>📊 Event Tracking Demo</h2>
+            <p>Try these interactions to see anonymous intent tracking in action:</p>
+            
+            <div class="buttons">
+                <button class="btn btn-primary" onclick="trackCustomEvent('tap_to_save', {item_id: 'demo_item_1'})">
+                    Track: Tap to Save
+                </button>
+                <button class="btn btn-primary" onclick="trackCustomEvent('hover', {element: 'demo_button'})">
+                    Track: Hover Intent
+                </button>
+                <button class="btn btn-primary" onclick="trackCustomEvent('purchase_intent', {category: 'demo'})">
+                    Track: Purchase Intent
+                </button>
+                <button class="btn btn-primary" onclick="trackSearch('coffee shops near me')">
+                    Track: Search Query
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Tracking Demo -->
+        <div class="demo-section">
+            <h2>📝 Form Interaction Tracking</h2>
+            <p>This form demonstrates automatic form tracking (start, abandon, submit):</p>
+            
+            <form class="form-example" id="demo-form" onsubmit="handleFormSubmit(event)">
+                <div class="form-group">
+                    <label for="demo-email">Email (demo only):</label>
+                    <input type="email" id="demo-email" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="demo-category">Interest Category:</label>
+                    <select id="demo-category">
+                        <option value="">Select a category</option>
+                        <option value="restaurants">Restaurants</option>
+                        <option value="events">Events</option>
+                        <option value="venues">Venues</option>
+                        <option value="entertainment">Entertainment</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="demo-message">Message:</label>
+                    <textarea id="demo-message" rows="3" placeholder="Tell us about your interests..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-success">Submit Demo Form</button>
+            </form>
+        </div>
+
+        <!-- Real-time Metrics -->
+        <div class="demo-section">
+            <h2>📈 Live Session Metrics</h2>
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-value" id="events-tracked">0</div>
+                    <div class="metric-label">Events Tracked</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="session-time">0s</div>
+                    <div class="metric-label">Session Time</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="pending-events">0</div>
+                    <div class="metric-label">Pending Events</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="anon-id">Loading...</div>
+                    <div class="metric-label">Anonymous ID</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Links -->
+        <div class="demo-section">
+            <h2>📁 Download Demo Files</h2>
+            <p>Test download tracking with these sample files:</p>
+            <div class="buttons">
+                <a href="#" class="btn btn-secondary" onclick="trackDownload('demo-guide.pdf')">
+                    📄 Download Guide (PDF)
+                </a>
+                <a href="#" class="btn btn-secondary" onclick="trackDownload('demo-data.xlsx')">
+                    📊 Download Data (Excel)
+                </a>
+                <a href="https://example.com" class="btn btn-secondary" target="_blank">
+                    🔗 External Link (tracked)
+                </a>
+            </div>
+        </div>
+
+        <!-- SDK Status -->
+        <div class="demo-section">
+            <h2>⚙️ SDK Status</h2>
+            <div id="sdk-status" class="status info">
+                <strong>SDK Status:</strong> <span id="status-text">Initializing...</span>
+            </div>
+            <div class="buttons">
+                <button class="btn btn-primary" onclick="flushEvents()">Flush Events Now</button>
+                <button class="btn btn-secondary" onclick="showSDKInfo()">Show SDK Info</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Consent Banner -->
+    <div id="consent-banner" class="consent-banner">
+        <div class="consent-content">
+            <div>
+                <strong>Privacy Notice:</strong> This demo uses anonymous analytics to track behavioral patterns. 
+                No personal information is collected. 
+                <a href="#" class="privacy-link">Learn more</a>
+            </div>
+            <div>
+                <button class="btn btn-success" onclick="acceptConsent()">Accept</button>
+                <button class="btn btn-secondary" onclick="declineConsent()">Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SDK Integration -->
+    <script type="module">
+        import { initAnonSDK, EVENT_TYPES } from '../../sdk/web/index.js';
+
+        let sdk = null;
+        let eventsTracked = 0;
+        let sessionStartTime = Date.now();
+
+        // Initialize SDK
+        async function initializeSDK() {
+            try {
+                const statusEl = document.getElementById('status-text');
+                statusEl.textContent = 'Initializing...';
+
+                sdk = await initAnonSDK({
+                    apiKey: 'demo-api-key-12345',
+                    environment: 'development',
+                    debugMode: true,
+                    autoTracking: true,
+                    onConsent: () => {
+                        // Check if user has previously given consent
+                        const consent = localStorage.getItem('demo-consent');
+                        if (consent === null) {
+                            showConsentBanner();
+                            return false;
+                        }
+                        return consent === 'true';
+                    }
+                });
+
+                statusEl.textContent = 'Ready';
+                document.getElementById('sdk-status').className = 'status success';
+                
+                updateMetrics();
+                setInterval(updateMetrics, 2000);
+
+                console.log('Anonymous Intent SDK initialized successfully');
+                
+            } catch (error) {
+                console.error('Failed to initialize SDK:', error);
+                document.getElementById('status-text').textContent = 'Error: ' + error.message;
+                document.getElementById('sdk-status').className = 'status error';
+            }
+        }
+
+        // Update live metrics
+        function updateMetrics() {
+            if (!sdk) return;
+
+            document.getElementById('events-tracked').textContent = eventsTracked;
+            document.getElementById('session-time').textContent = 
+                Math.floor((Date.now() - sessionStartTime) / 1000) + 's';
+            document.getElementById('pending-events').textContent = sdk.getPendingEventsCount();
+            
+            const anonId = sdk.getAnonId();
+            if (anonId) {
+                document.getElementById('anon-id').textContent = anonId.substring(0, 12) + '...';
+            }
+        }
+
+        // Consent management
+        function showConsentBanner() {
+            document.getElementById('consent-banner').classList.add('show');
+        }
+
+        function hideConsentBanner() {
+            document.getElementById('consent-banner').classList.remove('show');
+        }
+
+        window.acceptConsent = function() {
+            localStorage.setItem('demo-consent', 'true');
+            if (sdk) {
+                sdk.setConsent(true);
+            }
+            updateConsentStatus();
+            hideConsentBanner();
+        };
+
+        window.declineConsent = function() {
+            localStorage.setItem('demo-consent', 'false');
+            if (sdk) {
+                sdk.setConsent(false);
+            }
+            updateConsentStatus();
+            hideConsentBanner();
+        };
+
+        window.grantConsent = function() {
+            localStorage.setItem('demo-consent', 'true');
+            if (sdk) {
+                sdk.setConsent(true);
+            }
+            updateConsentStatus();
+        };
+
+        window.revokeConsent = function() {
+            localStorage.setItem('demo-consent', 'false');
+            if (sdk) {
+                sdk.setConsent(false);
+            }
+            updateConsentStatus();
+        };
+
+        function updateConsentStatus() {
+            const consent = localStorage.getItem('demo-consent');
+            const statusEl = document.getElementById('consent-text');
+            const containerEl = document.getElementById('consent-status');
+            
+            if (consent === 'true') {
+                statusEl.textContent = 'Granted ✅';
+                containerEl.className = 'status success';
+            } else if (consent === 'false') {
+                statusEl.textContent = 'Revoked ❌';
+                containerEl.className = 'status error';
+            } else {
+                statusEl.textContent = 'Not set';
+                containerEl.className = 'status info';
+            }
+        }
+
+        // Event tracking functions
+        window.trackCustomEvent = async function(eventType, properties) {
+            if (!sdk) {
+                alert('SDK not initialized');
+                return;
+            }
+
+            try {
+                await sdk.trackEvent(eventType, properties);
+                eventsTracked++;
+                console.log(`Tracked event: ${eventType}`, properties);
+            } catch (error) {
+                console.error('Error tracking event:', error);
+            }
+        };
+
+        window.trackSearch = async function(query) {
+            if (!sdk) return;
+            
+            try {
+                await sdk.trackEvent(EVENT_TYPES.SEARCH, {
+                    search_query: query,
+                    search_context: 'demo_page',
+                    results_shown: Math.floor(Math.random() * 20) + 1
+                });
+                eventsTracked++;
+                console.log('Tracked search:', query);
+            } catch (error) {
+                console.error('Error tracking search:', error);
+            }
+        };
+
+        window.trackDownload = function(filename) {
+            console.log('Download tracked:', filename);
+            // SDK will auto-track this via click tracking
+            eventsTracked++;
+        };
+
+        window.handleFormSubmit = function(event) {
+            event.preventDefault();
+            console.log('Form submitted (demo - not actually sent)');
+            alert('Demo form submitted! Check console for tracking events.');
+        };
+
+        window.flushEvents = async function() {
+            if (!sdk) return;
+            
+            try {
+                await sdk.flush();
+                console.log('Events flushed successfully');
+                alert('Events flushed to server!');
+            } catch (error) {
+                console.error('Error flushing events:', error);
+                alert('Error flushing events');
+            }
+        };
+
+        window.showSDKInfo = function() {
+            if (!sdk) {
+                alert('SDK not initialized');
+                return;
+            }
+
+            const info = {
+                'Anonymous ID': sdk.getAnonId(),
+                'Session ID': sdk.getSessionId(),
+                'Pending Events': sdk.getPendingEventsCount(),
+                'Consent Status': sdk.hasUserConsent(),
+                'Events Tracked This Session': eventsTracked
+            };
+
+            const infoText = Object.entries(info)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join('\n');
+
+            alert(`SDK Information:\n\n${infoText}`);
+        };
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', () => {
+            updateConsentStatus();
+            initializeSDK();
+        });
+
+    </script>
+</body>
+</html>
