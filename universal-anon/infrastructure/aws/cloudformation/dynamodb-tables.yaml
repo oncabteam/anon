@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB Tables for OnCabaret Anonymous Intent SDK'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Environment name'
+  
+  ProjectName:
+    Type: String
+    Default: 'anon-intent-sdk'
+    Description: 'Project name for resource naming'
+
+Resources:
+  # Events Table - Primary storage for all intent events
+  EventsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-events-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY#ANON_ID
+          AttributeType: 'S'
+        - AttributeName: 'sk'           # Sort key: TIMESTAMP#EVENT_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: API_KEY#DATE
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: EVENT_TYPE#TIMESTAMP
+          AttributeType: 'S'
+        - AttributeName: 'gsi2pk'       # GSI2 PK: API_KEY#SESSION_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi2sk'       # GSI2 SK: TIMESTAMP
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+        - AttributeName: 'sk'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-EventsByDate'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+        - IndexName: 'GSI2-EventsBySession'
+          KeySchema:
+            - AttributeName: 'gsi2pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi2sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      TimeToLiveSpecification:
+        AttributeName: 'ttl'
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'EventStorage'
+
+  # Sessions Table - Session tracking and analytics
+  SessionsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-sessions-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY#ANON_ID
+          AttributeType: 'S'
+        - AttributeName: 'sk'           # Sort key: SESSION_START_TIME#SESSION_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: API_KEY#DATE
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: SESSION_DURATION
+          AttributeType: 'N'
+        - AttributeName: 'gsi2pk'       # GSI2 PK: API_KEY#CLUSTER_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi2sk'       # GSI2 SK: INTENT_SCORE
+          AttributeType: 'N'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+        - AttributeName: 'sk'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-SessionsByDate'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+        - IndexName: 'GSI2-SessionsByCluster'
+          KeySchema:
+            - AttributeName: 'gsi2pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi2sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      TimeToLiveSpecification:
+        AttributeName: 'ttl'
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'SessionTracking'
+
+  # Intent Clusters Table - ML cluster storage
+  IntentClustersTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-intent-clusters-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY#CLUSTER_TYPE
+          AttributeType: 'S'
+        - AttributeName: 'sk'           # Sort key: CLUSTER_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: API_KEY
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: LAST_UPDATED
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+        - AttributeName: 'sk'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-ClustersByUpdate'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      TimeToLiveSpecification:
+        AttributeName: 'ttl'
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'MLClusters'
+
+  # API Keys Table - Customer API key management
+  ApiKeysTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-api-keys-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: CUSTOMER_ID
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: CREATED_AT
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-KeysByCustomer'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'ApiKeyManagement'
+
+  # Real-time Metrics Table - Aggregated metrics for dashboard
+  MetricsTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-metrics-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY#METRIC_TYPE
+          AttributeType: 'S'
+        - AttributeName: 'sk'           # Sort key: TIME_WINDOW#TIMESTAMP
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: API_KEY
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: TIMESTAMP
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+        - AttributeName: 'sk'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-MetricsByTime'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      TimeToLiveSpecification:
+        AttributeName: 'ttl'
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'RealTimeMetrics'
+
+  # Feature Store Table - ML features for training and inference
+  FeatureStoreTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Sub '${ProjectName}-feature-store-${Environment}'
+      BillingMode: 'PAY_PER_REQUEST'
+      AttributeDefinitions:
+        - AttributeName: 'pk'           # Partition key: API_KEY#ANON_ID
+          AttributeType: 'S'
+        - AttributeName: 'sk'           # Sort key: FEATURE_TYPE#WINDOW
+          AttributeType: 'S'
+        - AttributeName: 'gsi1pk'       # GSI1 PK: API_KEY#FEATURE_TYPE
+          AttributeType: 'S'
+        - AttributeName: 'gsi1sk'       # GSI1 SK: LAST_UPDATED
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'pk'
+          KeyType: 'HASH'
+        - AttributeName: 'sk'
+          KeyType: 'RANGE'
+      GlobalSecondaryIndexes:
+        - IndexName: 'GSI1-FeaturesByType'
+          KeySchema:
+            - AttributeName: 'gsi1pk'
+              KeyType: 'HASH'
+            - AttributeName: 'gsi1sk'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
+      TimeToLiveSpecification:
+        AttributeName: 'ttl'
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'FeatureStore'
+
+Outputs:
+  EventsTableName:
+    Description: 'Events DynamoDB Table Name'
+    Value: !Ref EventsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-EventsTable'
+
+  EventsTableStreamArn:
+    Description: 'Events Table Stream ARN'
+    Value: !GetAtt EventsTable.StreamArn
+    Export:
+      Name: !Sub '${AWS::StackName}-EventsTableStream'
+
+  SessionsTableName:
+    Description: 'Sessions DynamoDB Table Name'
+    Value: !Ref SessionsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionsTable'
+
+  SessionsTableStreamArn:
+    Description: 'Sessions Table Stream ARN'
+    Value: !GetAtt SessionsTable.StreamArn
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionsTableStream'
+
+  IntentClustersTableName:
+    Description: 'Intent Clusters DynamoDB Table Name'
+    Value: !Ref IntentClustersTable
+    Export:
+      Name: !Sub '${AWS::StackName}-IntentClustersTable'
+
+  ApiKeysTableName:
+    Description: 'API Keys DynamoDB Table Name'
+    Value: !Ref ApiKeysTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeysTable'
+
+  MetricsTableName:
+    Description: 'Metrics DynamoDB Table Name'
+    Value: !Ref MetricsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-MetricsTable'
+
+  FeatureStoreTableName:
+    Description: 'Feature Store DynamoDB Table Name'
+    Value: !Ref FeatureStoreTable
+    Export:
+      Name: !Sub '${AWS::StackName}-FeatureStoreTable'

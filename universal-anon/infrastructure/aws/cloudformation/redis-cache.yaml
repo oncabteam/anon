@@ -1,0 +1,660 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Redis Cache Infrastructure for OnCabaret Anonymous Intent SDK'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Environment name'
+  
+  ProjectName:
+    Type: String
+    Default: 'anon-intent-sdk'
+    Description: 'Project name for resource naming'
+
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: 'VPC ID where Redis will be deployed'
+
+  SubnetIds:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: 'Subnet IDs for Redis cluster'
+
+Resources:
+  # Redis Subnet Group
+  RedisSubnetGroup:
+    Type: 'AWS::ElastiCache::SubnetGroup'
+    Properties:
+      Description: 'Subnet group for Anonymous Intent SDK Redis'
+      SubnetIds: !Ref SubnetIds
+      CacheSubnetGroupName: !Sub '${ProjectName}-redis-subnet-group-${Environment}'
+
+  # Redis Security Group
+  RedisSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: !Sub '${ProjectName}-redis-sg-${Environment}'
+      GroupDescription: 'Security group for Anonymous Intent SDK Redis'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+          Description: 'Redis access from application'
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${ProjectName}-redis-sg-${Environment}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+
+  # Application Security Group (for Lambda functions)
+  ApplicationSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: !Sub '${ProjectName}-app-sg-${Environment}'
+      GroupDescription: 'Security group for Anonymous Intent SDK applications'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${ProjectName}-app-sg-${Environment}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+
+  # Redis Parameter Group
+  RedisParameterGroup:
+    Type: 'AWS::ElastiCache::ParameterGroup'
+    Properties:
+      CacheParameterGroupFamily: 'redis7.x'
+      Description: 'Parameter group for Anonymous Intent SDK Redis'
+      Properties:
+        # Optimize for session storage and real-time metrics
+        maxmemory-policy: 'allkeys-lru'
+        timeout: '300'
+        tcp-keepalive: '60'
+        # Enable notifications for keyspace events
+        notify-keyspace-events: 'Ex'
+        # Optimize for high throughput
+        hz: '100'
+
+  # Redis Replication Group (Cluster Mode)
+  RedisReplicationGroup:
+    Type: 'AWS::ElastiCache::ReplicationGroup'
+    Properties:
+      ReplicationGroupId: !Sub '${ProjectName}-redis-${Environment}'
+      Description: 'Redis cluster for Anonymous Intent SDK'
+      Engine: 'redis'
+      EngineVersion: '7.0'
+      CacheNodeType: !If 
+        - IsProduction
+        - 'cache.r6g.large'
+        - 'cache.t3.micro'
+      NumCacheClusters: !If
+        - IsProduction
+        - 3
+        - 1
+      Port: 6379
+      ParameterGroupName: !Ref RedisParameterGroup
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      MultiAZEnabled: !If
+        - IsProduction
+        - true
+        - false
+      AutomaticFailoverEnabled: !If
+        - IsProduction
+        - true
+        - false
+      # Backup configuration
+      SnapshotRetentionLimit: !If
+        - IsProduction
+        - 7
+        - 1
+      SnapshotWindow: '03:00-05:00'
+      PreferredMaintenanceWindow: 'sun:05:00-sun:07:00'
+      # Notifications
+      NotificationTopicArn: !Ref RedisNotificationTopic
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${ProjectName}-redis-${Environment}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'Cache'
+
+  # SNS Topic for Redis notifications
+  RedisNotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: !Sub '${ProjectName}-redis-notifications-${Environment}'
+      DisplayName: 'Anonymous Intent SDK Redis Notifications'
+      KmsMasterKeyId: 'alias/aws/sns'
+
+  # Lambda function for Redis cache management
+  RedisCacheManagerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: 'RedisCacheAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'elasticache:DescribeReplicationGroups'
+                  - 'elasticache:DescribeCacheClusters'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                Resource: 
+                  - 'arn:aws:dynamodb:*:*:table/*anon-intent-sdk*'
+
+  RedisCacheManagerFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub '${ProjectName}-redis-cache-manager-${Environment}'
+      Runtime: 'python3.9'
+      Handler: 'index.handler'
+      Role: !GetAtt RedisCacheManagerRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref ApplicationSecurityGroup
+        SubnetIds: !Ref SubnetIds
+      Environment:
+        Variables:
+          REDIS_ENDPOINT: !GetAtt RedisReplicationGroup.RedisEndpoint.Address
+          REDIS_PORT: !GetAtt RedisReplicationGroup.RedisEndpoint.Port
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import redis
+          import boto3
+          import os
+          import logging
+          from datetime import datetime, timedelta
+          from typing import Dict, List, Optional, Any
+          import hashlib
+          import uuid
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # Redis client
+          redis_client = None
+
+          def get_redis_client():
+              global redis_client
+              if redis_client is None:
+                  redis_client = redis.Redis(
+                      host=os.environ['REDIS_ENDPOINT'],
+                      port=int(os.environ['REDIS_PORT']),
+                      decode_responses=True,
+                      socket_connect_timeout=5,
+                      socket_timeout=5,
+                      retry_on_timeout=True,
+                      health_check_interval=30
+                  )
+              return redis_client
+
+          def handler(event, context):
+              """
+              Redis cache manager for Anonymous Intent SDK
+              Handles session caching, API key validation, and real-time metrics
+              """
+              try:
+                  operation = event.get('operation', 'unknown')
+                  
+                  if operation == 'cache_session':
+                      return cache_session_data(event)
+                  elif operation == 'get_session':
+                      return get_session_data(event)
+                  elif operation == 'cache_api_key':
+                      return cache_api_key_validation(event)
+                  elif operation == 'validate_api_key':
+                      return validate_api_key_cached(event)
+                  elif operation == 'update_metrics':
+                      return update_real_time_metrics(event)
+                  elif operation == 'get_metrics':
+                      return get_real_time_metrics(event)
+                  elif operation == 'cleanup':
+                      return cleanup_expired_data(event)
+                  else:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': f'Unknown operation: {operation}'})
+                      }
+                      
+              except Exception as e:
+                  logger.error(f"Error in cache manager: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def cache_session_data(event):
+              """Cache session data with TTL"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  session_data = event.get('session_data', {})
+                  session_id = session_data.get('session_id')
+                  anon_id = session_data.get('anon_id')
+                  api_key = session_data.get('api_key')
+                  
+                  if not all([session_id, anon_id, api_key]):
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing required session data'})
+                      }
+                  
+                  # Create cache keys
+                  session_key = f"session:{api_key}:{session_id}"
+                  user_sessions_key = f"user_sessions:{api_key}:{anon_id}"
+                  
+                  # Cache session data (30 minutes TTL)
+                  redis_conn.setex(
+                      session_key,
+                      1800,  # 30 minutes
+                      json.dumps(session_data)
+                  )
+                  
+                  # Add to user's session list
+                  redis_conn.sadd(user_sessions_key, session_id)
+                  redis_conn.expire(user_sessions_key, 1800)
+                  
+                  # Update session activity timestamp
+                  activity_key = f"session_activity:{api_key}:{session_id}"
+                  redis_conn.setex(activity_key, 1800, datetime.utcnow().isoformat())
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'cached': True,
+                          'session_key': session_key,
+                          'ttl': 1800
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error caching session data: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def get_session_data(event):
+              """Retrieve cached session data"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  api_key = event.get('api_key')
+                  session_id = event.get('session_id')
+                  
+                  if not all([api_key, session_id]):
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing api_key or session_id'})
+                      }
+                  
+                  session_key = f"session:{api_key}:{session_id}"
+                  session_data = redis_conn.get(session_key)
+                  
+                  if session_data:
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'found': True,
+                              'session_data': json.loads(session_data),
+                              'ttl': redis_conn.ttl(session_key)
+                          })
+                      }
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'body': json.dumps({'found': False})
+                      }
+                      
+              except Exception as e:
+                  logger.error(f"Error getting session data: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def cache_api_key_validation(event):
+              """Cache API key validation result"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  api_key = event.get('api_key')
+                  validation_data = event.get('validation_data', {})
+                  
+                  if not api_key:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing api_key'})
+                      }
+                  
+                  # Create cache key
+                  validation_key = f"api_key_validation:{hashlib.sha256(api_key.encode()).hexdigest()}"
+                  
+                  # Cache validation data (1 hour TTL)
+                  redis_conn.setex(
+                      validation_key,
+                      3600,  # 1 hour
+                      json.dumps(validation_data)
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'cached': True,
+                          'validation_key': validation_key,
+                          'ttl': 3600
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error caching API key validation: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def validate_api_key_cached(event):
+              """Validate API key using cache"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  api_key = event.get('api_key')
+                  
+                  if not api_key:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing api_key'})
+                      }
+                  
+                  validation_key = f"api_key_validation:{hashlib.sha256(api_key.encode()).hexdigest()}"
+                  validation_data = redis_conn.get(validation_key)
+                  
+                  if validation_data:
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'cached': True,
+                              'valid': True,
+                              'validation_data': json.loads(validation_data),
+                              'ttl': redis_conn.ttl(validation_key)
+                          })
+                      }
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'body': json.dumps({
+                              'cached': False,
+                              'valid': False
+                          })
+                      }
+                      
+              except Exception as e:
+                  logger.error(f"Error validating API key: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def update_real_time_metrics(event):
+              """Update real-time metrics in cache"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  api_key = event.get('api_key')
+                  metrics = event.get('metrics', {})
+                  
+                  if not api_key:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing api_key'})
+                      }
+                  
+                  # Update various metric types
+                  current_time = datetime.utcnow()
+                  minute_key = current_time.strftime('%Y-%m-%d:%H:%M')
+                  hour_key = current_time.strftime('%Y-%m-%d:%H')
+                  day_key = current_time.strftime('%Y-%m-%d')
+                  
+                  # Update counters for different time windows
+                  time_windows = [
+                      (f"metrics:{api_key}:minute:{minute_key}", 120),  # 2 minutes TTL
+                      (f"metrics:{api_key}:hour:{hour_key}", 3900),     # 65 minutes TTL
+                      (f"metrics:{api_key}:day:{day_key}", 90000)       # 25 hours TTL
+                  ]
+                  
+                  for metrics_key, ttl in time_windows:
+                      # Increment counters
+                      for metric_name, value in metrics.items():
+                          if isinstance(value, (int, float)):
+                              redis_conn.hincrby(metrics_key, metric_name, int(value))
+                      
+                      # Set TTL
+                      redis_conn.expire(metrics_key, ttl)
+                  
+                  # Update live dashboard metrics
+                  live_metrics_key = f"live_metrics:{api_key}"
+                  redis_conn.hmset(live_metrics_key, metrics)
+                  redis_conn.expire(live_metrics_key, 300)  # 5 minutes TTL
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'updated': True,
+                          'metrics_count': len(metrics)
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error updating metrics: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def get_real_time_metrics(event):
+              """Get real-time metrics from cache"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  api_key = event.get('api_key')
+                  time_window = event.get('time_window', 'live')
+                  
+                  if not api_key:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'Missing api_key'})
+                      }
+                  
+                  if time_window == 'live':
+                      metrics_key = f"live_metrics:{api_key}"
+                      metrics = redis_conn.hgetall(metrics_key)
+                  else:
+                      # Get aggregated metrics for time window
+                      current_time = datetime.utcnow()
+                      
+                      if time_window == 'minute':
+                          key_format = current_time.strftime('%Y-%m-%d:%H:%M')
+                      elif time_window == 'hour':
+                          key_format = current_time.strftime('%Y-%m-%d:%H')
+                      elif time_window == 'day':
+                          key_format = current_time.strftime('%Y-%m-%d')
+                      else:
+                          key_format = current_time.strftime('%Y-%m-%d:%H:%M')
+                      
+                      metrics_key = f"metrics:{api_key}:{time_window}:{key_format}"
+                      metrics = redis_conn.hgetall(metrics_key)
+                  
+                  # Convert string values back to numbers
+                  numeric_metrics = {}
+                  for key, value in metrics.items():
+                      try:
+                          numeric_metrics[key] = float(value)
+                      except ValueError:
+                          numeric_metrics[key] = value
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'metrics': numeric_metrics,
+                          'time_window': time_window,
+                          'timestamp': datetime.utcnow().isoformat()
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error getting metrics: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def cleanup_expired_data(event):
+              """Clean up expired data from cache"""
+              try:
+                  redis_conn = get_redis_client()
+                  
+                  # Get all keys matching patterns
+                  patterns = [
+                      'session:*',
+                      'user_sessions:*',
+                      'session_activity:*',
+                      'api_key_validation:*',
+                      'metrics:*',
+                      'live_metrics:*'
+                  ]
+                  
+                  cleaned_count = 0
+                  for pattern in patterns:
+                      keys = redis_conn.keys(pattern)
+                      for key in keys:
+                          ttl = redis_conn.ttl(key)
+                          if ttl == -2:  # Key doesn't exist
+                              continue
+                          elif ttl == -1:  # Key exists but has no TTL
+                              # Set a default TTL based on key type
+                              if 'session' in key:
+                                  redis_conn.expire(key, 1800)  # 30 minutes
+                              elif 'metrics' in key:
+                                  redis_conn.expire(key, 3600)  # 1 hour
+                              else:
+                                  redis_conn.expire(key, 3600)  # 1 hour default
+                              cleaned_count += 1
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'cleaned': True,
+                          'keys_processed': cleaned_count
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error cleaning up cache: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  # CloudWatch Event Rule for cache cleanup
+  CacheCleanupScheduleRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: !Sub '${ProjectName}-cache-cleanup-${Environment}'
+      Description: 'Trigger cache cleanup every hour'
+      ScheduleExpression: 'rate(1 hour)'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt RedisCacheManagerFunction.Arn
+          Id: 'CacheCleanupTarget'
+          Input: '{"operation": "cleanup"}'
+
+  # Permission for CloudWatch Events to invoke Lambda
+  CacheCleanupPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref RedisCacheManagerFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt CacheCleanupScheduleRule.Arn
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Outputs:
+  RedisEndpoint:
+    Description: 'Redis Cluster Endpoint'
+    Value: !GetAtt RedisReplicationGroup.RedisEndpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisEndpoint'
+
+  RedisPort:
+    Description: 'Redis Port'
+    Value: !GetAtt RedisReplicationGroup.RedisEndpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisPort'
+
+  RedisSecurityGroupId:
+    Description: 'Redis Security Group ID'
+    Value: !Ref RedisSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisSecurityGroup'
+
+  ApplicationSecurityGroupId:
+    Description: 'Application Security Group ID'
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationSecurityGroup'
+
+  CacheManagerFunctionArn:
+    Description: 'Redis Cache Manager Lambda Function ARN'
+    Value: !GetAtt RedisCacheManagerFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CacheManagerFunction'
+
+  RedisNotificationTopicArn:
+    Description: 'Redis Notification SNS Topic ARN'
+    Value: !Ref RedisNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisNotificationTopic'

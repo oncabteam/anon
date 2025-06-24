@@ -1,0 +1,427 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 Data Lake for OnCabaret Anonymous Intent SDK'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Environment name'
+  
+  ProjectName:
+    Type: String
+    Default: 'anon-intent-sdk'
+    Description: 'Project name for resource naming'
+
+Resources:
+  # Raw Events Bucket - Store raw JSON events for backup and reprocessing
+  RawEventsBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${ProjectName}-raw-events-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: 'Enabled'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          # Move to IA after 30 days
+          - Id: 'TransitionToIA'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'STANDARD_IA'
+                TransitionInDays: 30
+          # Move to Glacier after 90 days
+          - Id: 'TransitionToGlacier'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'GLACIER'
+                TransitionInDays: 90
+          # Move to Deep Archive after 365 days
+          - Id: 'TransitionToDeepArchive'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'DEEP_ARCHIVE'
+                TransitionInDays: 365
+          # Delete after 7 years (2555 days)
+          - Id: 'DeleteOldData'
+            Status: 'Enabled'
+            ExpirationInDays: 2555
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt DataProcessorLambda.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: 'prefix'
+                    Value: 'events/'
+                  - Name: 'suffix'
+                    Value: '.json'
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'DataLake'
+
+  # Processed Data Bucket - Store Parquet files for analytics
+  ProcessedDataBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${ProjectName}-processed-data-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: 'Enabled'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          # Move to IA after 30 days
+          - Id: 'TransitionToIA'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'STANDARD_IA'
+                TransitionInDays: 30
+          # Move to Glacier after 180 days
+          - Id: 'TransitionToGlacier'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'GLACIER'
+                TransitionInDays: 180
+          # Move to Deep Archive after 730 days (2 years)
+          - Id: 'TransitionToDeepArchive'
+            Status: 'Enabled'
+            Transitions:
+              - StorageClass: 'DEEP_ARCHIVE'
+                TransitionInDays: 730
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'ProcessedDataLake'
+
+  # ML Models Bucket - Store trained models and artifacts
+  MLModelsBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${ProjectName}-ml-models-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: 'Enabled'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          # Keep recent model versions readily available
+          - Id: 'ModelVersioning'
+            Status: 'Enabled'
+            NoncurrentVersionTransitions:
+              - StorageClass: 'STANDARD_IA'
+                TransitionInDays: 30
+              - StorageClass: 'GLACIER'
+                TransitionInDays: 90
+            NoncurrentVersionExpirationInDays: 365
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'MLModels'
+
+  # Data Processor Lambda Function
+  DataProcessorLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'S3DataLakeAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub '${RawEventsBucket}/*'
+                  - !Sub '${ProcessedDataBucket}/*'
+              - Effect: 'Allow'
+                Action:
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt RawEventsBucket.Arn
+                  - !GetAtt ProcessedDataBucket.Arn
+
+  DataProcessorLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub '${ProjectName}-data-processor-${Environment}'
+      Runtime: 'python3.9'
+      Handler: 'index.handler'
+      Role: !GetAtt DataProcessorLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          RAW_BUCKET: !Ref RawEventsBucket
+          PROCESSED_BUCKET: !Ref ProcessedDataBucket
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import pandas as pd
+          import pyarrow as pa
+          import pyarrow.parquet as pq
+          from io import BytesIO
+          import os
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          s3_client = boto3.client('s3')
+          
+          def handler(event, context):
+              """
+              Process raw JSON events and convert to Parquet format
+              Partition by date and API key for efficient querying
+              """
+              try:
+                  processed_files = []
+                  
+                  for record in event['Records']:
+                      # Get S3 object info
+                      bucket = record['s3']['bucket']['name']
+                      key = record['s3']['object']['key']
+                      
+                      logger.info(f"Processing {bucket}/{key}")
+                      
+                      # Download and parse JSON
+                      response = s3_client.get_object(Bucket=bucket, Key=key)
+                      content = response['Body'].read()
+                      
+                      # Handle both single objects and newline-delimited JSON
+                      if content.strip().startswith('['):
+                          events = json.loads(content)
+                      else:
+                          events = [json.loads(line) for line in content.decode().strip().split('\n') if line.strip()]
+                      
+                      if not events:
+                          continue
+                      
+                      # Convert to DataFrame
+                      df = pd.json_normalize(events)
+                      
+                      # Add processing timestamp
+                      df['processed_at'] = datetime.utcnow().isoformat()
+                      
+                      # Extract date for partitioning
+                      df['event_date'] = pd.to_datetime(df['timestamp']).dt.date
+                      df['event_hour'] = pd.to_datetime(df['timestamp']).dt.hour
+                      
+                      # Group by API key and date for efficient partitioning
+                      for (api_key, event_date), group in df.groupby(['apiKey', 'event_date']):
+                          # Create partition path
+                          partition_path = f"events/api_key={api_key}/date={event_date}/"
+                          filename = f"events_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.parquet"
+                          s3_key = partition_path + filename
+                          
+                          # Convert to Parquet
+                          table = pa.Table.from_pandas(group)
+                          parquet_buffer = BytesIO()
+                          pq.write_table(table, parquet_buffer, compression='snappy')
+                          
+                          # Upload to processed bucket
+                          processed_bucket = os.environ['PROCESSED_BUCKET']
+                          s3_client.put_object(
+                              Bucket=processed_bucket,
+                              Key=s3_key,
+                              Body=parquet_buffer.getvalue(),
+                              ContentType='application/octet-stream',
+                              Metadata={
+                                  'source-file': key,
+                                  'api-key': api_key,
+                                  'event-date': str(event_date),
+                                  'record-count': str(len(group))
+                              }
+                          )
+                          
+                          processed_files.append(s3_key)
+                          logger.info(f"Created {processed_bucket}/{s3_key} with {len(group)} records")
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'processed_files': processed_files,
+                          'total_files': len(processed_files)
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error processing data: {str(e)}")
+                  raise
+
+  # Lambda permission for S3 to invoke
+  S3InvokeLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref DataProcessorLambda
+      Action: 'lambda:InvokeFunction'
+      Principal: 's3.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !GetAtt RawEventsBucket.Arn
+
+  # Athena Workgroup for querying data lake
+  AthenaWorkgroup:
+    Type: 'AWS::Athena::WorkGroup'
+    Properties:
+      Name: !Sub '${ProjectName}-analytics-${Environment}'
+      Description: 'Workgroup for anonymous intent analytics'
+      State: 'ENABLED'
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${ProcessedDataBucket}/athena-results/'
+          EncryptionConfiguration:
+            EncryptionOption: 'SSE_S3'
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetrics: true
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+
+  # Glue Database for data catalog
+  GlueDatabase:
+    Type: 'AWS::Glue::Database'
+    Properties:
+      CatalogId: !Ref 'AWS::AccountId'
+      DatabaseInput:
+        Name: !Sub '${ProjectName}_analytics_${Environment}'
+        Description: 'Anonymous Intent Analytics Database'
+
+  # Glue Table for events
+  EventsGlueTable:
+    Type: 'AWS::Glue::Table'
+    Properties:
+      CatalogId: !Ref 'AWS::AccountId'
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: 'events'
+        Description: 'Anonymous intent events'
+        TableType: 'EXTERNAL_TABLE'
+        StorageDescriptor:
+          Columns:
+            - Name: 'eventId'
+              Type: 'string'
+            - Name: 'eventName'
+              Type: 'string'
+            - Name: 'anonId'
+              Type: 'string'
+            - Name: 'sessionId'
+              Type: 'string'
+            - Name: 'timestamp'
+              Type: 'timestamp'
+            - Name: 'properties'
+              Type: 'map<string,string>'
+            - Name: 'deviceMeta'
+              Type: 'struct<platform:string,platformVersion:string,deviceModel:string>'
+            - Name: 'geo'
+              Type: 'struct<lat:double,lng:double,accuracy:float>'
+            - Name: 'platform'
+              Type: 'string'
+            - Name: 'environment'
+              Type: 'string'
+            - Name: 'sdkVersion'
+              Type: 'string'
+            - Name: 'processed_at'
+              Type: 'timestamp'
+            - Name: 'event_date'
+              Type: 'date'
+            - Name: 'event_hour'
+              Type: 'int'
+          Location: !Sub 's3://${ProcessedDataBucket}/events/'
+          InputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat'
+          OutputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+          SerdeInfo:
+            SerializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+        PartitionKeys:
+          - Name: 'api_key'
+            Type: 'string'
+          - Name: 'date'
+            Type: 'string'
+
+Outputs:
+  RawEventsBucketName:
+    Description: 'Raw Events S3 Bucket Name'
+    Value: !Ref RawEventsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-RawEventsBucket'
+
+  ProcessedDataBucketName:
+    Description: 'Processed Data S3 Bucket Name'
+    Value: !Ref ProcessedDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessedDataBucket'
+
+  MLModelsBucketName:
+    Description: 'ML Models S3 Bucket Name'
+    Value: !Ref MLModelsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-MLModelsBucket'
+
+  AthenaWorkgroupName:
+    Description: 'Athena Workgroup Name'
+    Value: !Ref AthenaWorkgroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AthenaWorkgroup'
+
+  GlueDatabaseName:
+    Description: 'Glue Database Name'
+    Value: !Ref GlueDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-GlueDatabase'
+
+  DataProcessorLambdaArn:
+    Description: 'Data Processor Lambda ARN'
+    Value: !GetAtt DataProcessorLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataProcessorLambda'

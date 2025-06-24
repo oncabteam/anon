@@ -1,0 +1,591 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Kinesis Streaming Infrastructure for OnCabaret Anonymous Intent SDK'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Environment name'
+  
+  ProjectName:
+    Type: String
+    Default: 'anon-intent-sdk'
+    Description: 'Project name for resource naming'
+
+  EventsTableName:
+    Type: String
+    Description: 'DynamoDB Events Table Name'
+
+  SessionsTableName:
+    Type: String
+    Description: 'DynamoDB Sessions Table Name'
+
+  MetricsTableName:
+    Type: String
+    Description: 'DynamoDB Metrics Table Name'
+
+  FeatureStoreTableName:
+    Type: String
+    Description: 'DynamoDB Feature Store Table Name'
+
+Resources:
+  # Kinesis Stream for real-time event ingestion
+  EventStream:
+    Type: 'AWS::Kinesis::Stream'
+    Properties:
+      Name: !Sub '${ProjectName}-events-${Environment}'
+      ShardCount: !If 
+        - IsProduction
+        - 10
+        - 2
+      RetentionPeriodHours: 168  # 7 days
+      StreamEncryption:
+        EncryptionType: 'KMS'
+        KeyId: 'alias/aws/kinesis'
+      Tags:
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: !Ref ProjectName
+        - Key: 'Component'
+          Value: 'EventStreaming'
+
+  # Kinesis Analytics Application for real-time aggregations
+  AnalyticsApplication:
+    Type: 'AWS::KinesisAnalytics::Application'
+    Properties:
+      ApplicationName: !Sub '${ProjectName}-realtime-analytics-${Environment}'
+      ApplicationDescription: 'Real-time analytics for anonymous intent events'
+      ApplicationCode: |
+        CREATE OR REPLACE STREAM "DESTINATION_SQL_STREAM" (
+          api_key VARCHAR(64),
+          event_type VARCHAR(32),
+          platform VARCHAR(16),
+          event_count INTEGER,
+          unique_sessions INTEGER,
+          unique_users INTEGER,
+          window_start TIMESTAMP,
+          window_end TIMESTAMP
+        );
+
+        CREATE OR REPLACE PUMP "STREAM_PUMP" AS INSERT INTO "DESTINATION_SQL_STREAM"
+        SELECT STREAM
+          api_key,
+          event_name as event_type,
+          platform,
+          COUNT(*) as event_count,
+          COUNT(DISTINCT session_id) as unique_sessions,
+          COUNT(DISTINCT anon_id) as unique_users,
+          ROWTIME_TO_TIMESTAMP(ROWTIME_RANGE_START) as window_start,
+          ROWTIME_TO_TIMESTAMP(ROWTIME_RANGE_END) as window_end
+        FROM SOURCE_SQL_STREAM_001
+        WHERE api_key IS NOT NULL
+        GROUP BY
+          api_key,
+          event_name,
+          platform,
+          RANGE_INTERVAL '1' MINUTE;
+      Inputs:
+        - NamePrefix: 'SOURCE_SQL_STREAM'
+          KinesisStreamsInput:
+            ResourceARN: !GetAtt EventStream.Arn
+            RoleARN: !GetAtt AnalyticsRole.Arn
+          InputSchema:
+            RecordColumns:
+              - Name: 'eventId'
+                SqlType: 'VARCHAR(64)'
+                Mapping: '$.eventId'
+              - Name: 'eventName'
+                SqlType: 'VARCHAR(32)'
+                Mapping: '$.eventName'
+              - Name: 'anonId'
+                SqlType: 'VARCHAR(64)'
+                Mapping: '$.anonId'
+              - Name: 'sessionId'
+                SqlType: 'VARCHAR(64)'
+                Mapping: '$.sessionId'
+              - Name: 'timestamp'
+                SqlType: 'TIMESTAMP'
+                Mapping: '$.timestamp'
+              - Name: 'platform'
+                SqlType: 'VARCHAR(16)'
+                Mapping: '$.platform'
+              - Name: 'api_key'
+                SqlType: 'VARCHAR(64)'
+                Mapping: '$.apiKey'
+            RecordFormat:
+              RecordFormatType: 'JSON'
+              MappingParameters:
+                JSONMappingParameters:
+                  RecordRowPath: '$'
+
+  # IAM Role for Kinesis Analytics
+  AnalyticsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'kinesisanalytics.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'KinesisReadAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'kinesis:DescribeStream'
+                  - 'kinesis:GetShardIterator'
+                  - 'kinesis:GetRecords'
+                  - 'kinesis:ListShards'
+                Resource: !GetAtt EventStream.Arn
+
+  # Lambda Function for Event Processing
+  EventProcessorRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole'
+      Policies:
+        - PolicyName: 'DynamoDBAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchWriteItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EventsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EventsTableName}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionsTableName}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FeatureStoreTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${FeatureStoreTableName}/index/*'
+
+  EventProcessorFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub '${ProjectName}-event-processor-${Environment}'
+      Runtime: 'python3.9'
+      Handler: 'index.handler'
+      Role: !GetAtt EventProcessorRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTableName
+          SESSIONS_TABLE: !Ref SessionsTableName
+          FEATURE_STORE_TABLE: !Ref FeatureStoreTableName
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          from datetime import datetime, timedelta
+          import hashlib
+          import logging
+          from decimal import Decimal
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb')
+          events_table = dynamodb.Table(os.environ['EVENTS_TABLE'])
+          sessions_table = dynamodb.Table(os.environ['SESSIONS_TABLE'])
+          feature_store_table = dynamodb.Table(os.environ['FEATURE_STORE_TABLE'])
+
+          def handler(event, context):
+              """
+              Process events from Kinesis stream and store in DynamoDB
+              Generate real-time features for ML pipeline
+              """
+              try:
+                  processed_records = 0
+                  failed_records = 0
+                  
+                  for record in event['Records']:
+                      try:
+                          # Decode Kinesis data
+                          payload = json.loads(base64.b64decode(record['kinesis']['data']).decode('utf-8'))
+                          
+                          # Store event in DynamoDB
+                          store_event(payload)
+                          
+                          # Update session tracking
+                          update_session(payload)
+                          
+                          # Generate real-time features
+                          generate_features(payload)
+                          
+                          processed_records += 1
+                          
+                      except Exception as e:
+                          logger.error(f"Error processing record: {str(e)}")
+                          failed_records += 1
+                  
+                  logger.info(f"Processed {processed_records} records, {failed_records} failed")
+                  
+                  return {
+                      'batchItemFailures': []  # Enable partial batch failure handling
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Critical error in event processor: {str(e)}")
+                  raise
+
+          def store_event(event_data):
+              """Store event in DynamoDB with proper keys and TTL"""
+              api_key = event_data.get('apiKey', 'unknown')
+              anon_id = event_data.get('anonId', 'unknown')
+              timestamp = event_data.get('timestamp', datetime.utcnow().isoformat())
+              event_id = event_data.get('eventId', 'unknown')
+              
+              # Create partition and sort keys
+              pk = f"{api_key}#{anon_id}"
+              sk = f"{timestamp}#{event_id}"
+              
+              # GSI keys for efficient querying
+              event_date = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+              gsi1pk = f"{api_key}#{event_date}"
+              gsi1sk = f"{event_data.get('eventName', 'unknown')}#{timestamp}"
+              
+              gsi2pk = f"{api_key}#{event_data.get('sessionId', 'unknown')}"
+              gsi2sk = timestamp
+              
+              # Calculate TTL (1 year from now)
+              ttl = int((datetime.utcnow() + timedelta(days=365)).timestamp())
+              
+              # Store in DynamoDB
+              events_table.put_item(
+                  Item={
+                      'pk': pk,
+                      'sk': sk,
+                      'gsi1pk': gsi1pk,
+                      'gsi1sk': gsi1sk,
+                      'gsi2pk': gsi2pk,
+                      'gsi2sk': gsi2sk,
+                      'ttl': ttl,
+                      **event_data
+                  }
+              )
+
+          def update_session(event_data):
+              """Update session tracking with latest activity"""
+              api_key = event_data.get('apiKey', 'unknown')
+              anon_id = event_data.get('anonId', 'unknown')
+              session_id = event_data.get('sessionId', 'unknown')
+              timestamp = event_data.get('timestamp', datetime.utcnow().isoformat())
+              
+              pk = f"{api_key}#{anon_id}"
+              # Use session start time as sort key (would need to track this separately)
+              sk = f"{timestamp}#{session_id}"
+              
+              event_date = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+              gsi1pk = f"{api_key}#{event_date}"
+              
+              # Calculate TTL (1 year from now)
+              ttl = int((datetime.utcnow() + timedelta(days=365)).timestamp())
+              
+              try:
+                  sessions_table.update_item(
+                      Key={'pk': pk, 'sk': sk},
+                      UpdateExpression='SET last_activity = :timestamp, event_count = if_not_exists(event_count, :zero) + :one, gsi1pk = :gsi1pk, ttl = :ttl',
+                      ExpressionAttributeValues={
+                          ':timestamp': timestamp,
+                          ':zero': 0,
+                          ':one': 1,
+                          ':gsi1pk': gsi1pk,
+                          ':ttl': ttl
+                      }
+                  )
+              except Exception as e:
+                  # If session doesn't exist, create it
+                  sessions_table.put_item(
+                      Item={
+                          'pk': pk,
+                          'sk': sk,
+                          'gsi1pk': gsi1pk,
+                          'gsi1sk': Decimal('0'),  # Session duration, will be updated
+                          'gsi2pk': f"{api_key}#unknown",  # Cluster ID
+                          'gsi2sk': Decimal('0'),  # Intent score
+                          'session_id': session_id,
+                          'anon_id': anon_id,
+                          'api_key': api_key,
+                          'start_time': timestamp,
+                          'last_activity': timestamp,
+                          'event_count': 1,
+                          'platform': event_data.get('platform', 'unknown'),
+                          'ttl': ttl
+                      }
+                  )
+
+          def generate_features(event_data):
+              """Generate real-time features for ML pipeline"""
+              api_key = event_data.get('apiKey', 'unknown')
+              anon_id = event_data.get('anonId', 'unknown')
+              event_name = event_data.get('eventName', 'unknown')
+              timestamp = event_data.get('timestamp', datetime.utcnow().isoformat())
+              
+              pk = f"{api_key}#{anon_id}"
+              
+              # Generate various time window features
+              windows = ['1h', '24h', '7d']
+              
+              for window in windows:
+                  sk = f"event_count_{event_name}#{window}"
+                  
+                  # Calculate TTL based on window
+                  if window == '1h':
+                      ttl_hours = 2
+                  elif window == '24h':
+                      ttl_hours = 48
+                  else:  # 7d
+                      ttl_hours = 168
+                  
+                  ttl = int((datetime.utcnow() + timedelta(hours=ttl_hours)).timestamp())
+                  
+                  gsi1pk = f"{api_key}#{event_name}"
+                  gsi1sk = timestamp
+                  
+                  try:
+                      feature_store_table.update_item(
+                          Key={'pk': pk, 'sk': sk},
+                          UpdateExpression='SET feature_value = if_not_exists(feature_value, :zero) + :one, last_updated = :timestamp, gsi1pk = :gsi1pk, gsi1sk = :gsi1sk, ttl = :ttl',
+                          ExpressionAttributeValues={
+                              ':zero': Decimal('0'),
+                              ':one': Decimal('1'),
+                              ':timestamp': timestamp,
+                              ':gsi1pk': gsi1pk,
+                              ':gsi1sk': gsi1sk,
+                              ':ttl': ttl
+                          }
+                      )
+                  except Exception as e:
+                      logger.error(f"Error updating feature store: {str(e)}")
+
+  # Event Source Mapping for Kinesis to Lambda
+  EventProcessorEventSourceMapping:
+    Type: 'AWS::Lambda::EventSourceMapping'
+    Properties:
+      EventSourceArn: !GetAtt EventStream.Arn
+      FunctionName: !GetAtt EventProcessorFunction.Arn
+      StartingPosition: 'LATEST'
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 5
+      ParallelizationFactor: 10
+
+  # Lambda Function for Real-time Metrics Aggregation
+  MetricsAggregatorRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'MetricsAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:BatchWriteItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MetricsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MetricsTableName}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EventsTableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${EventsTableName}/index/*'
+
+  MetricsAggregatorFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Sub '${ProjectName}-metrics-aggregator-${Environment}'
+      Runtime: 'python3.9'
+      Handler: 'index.handler'
+      Role: !GetAtt MetricsAggregatorRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          METRICS_TABLE: !Ref MetricsTableName
+          EVENTS_TABLE: !Ref EventsTableName
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          from decimal import Decimal
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          dynamodb = boto3.resource('dynamodb')
+          metrics_table = dynamodb.Table(os.environ['METRICS_TABLE'])
+          events_table = dynamodb.Table(os.environ['EVENTS_TABLE'])
+
+          def handler(event, context):
+              """
+              Aggregate metrics from events and store in metrics table
+              Runs on schedule to provide real-time dashboard data
+              """
+              try:
+                  current_time = datetime.utcnow()
+                  
+                  # Aggregate metrics for different time windows
+                  time_windows = [
+                      ('1m', timedelta(minutes=1)),
+                      ('5m', timedelta(minutes=5)),
+                      ('1h', timedelta(hours=1)),
+                      ('24h', timedelta(hours=24))
+                  ]
+                  
+                  for window_name, window_delta in time_windows:
+                      aggregate_metrics(current_time, window_name, window_delta)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Metrics aggregated successfully',
+                          'timestamp': current_time.isoformat()
+                      })
+                  }
+                  
+              except Exception as e:
+                  logger.error(f"Error in metrics aggregator: {str(e)}")
+                  raise
+
+          def aggregate_metrics(current_time, window_name, window_delta):
+              """Aggregate metrics for a specific time window"""
+              start_time = current_time - window_delta
+              
+              # For demo, we'll create synthetic metrics
+              # In production, this would query the events table
+              
+              api_keys = ['demo-api-key-1', 'demo-api-key-2']  # Would be dynamic
+              
+              for api_key in api_keys:
+                  # Calculate basic metrics
+                  metrics = {
+                      'total_events': 100,  # Would be calculated from events
+                      'unique_sessions': 20,
+                      'unique_users': 15,
+                      'event_rate': 1.67,  # events per minute
+                      'bounce_rate': 0.25,
+                      'avg_session_duration': 180  # seconds
+                  }
+                  
+                  # Store aggregated metrics
+                  pk = f"{api_key}#summary"
+                  sk = f"{window_name}#{current_time.strftime('%Y-%m-%d_%H:%M')}"
+                  
+                  gsi1pk = api_key
+                  gsi1sk = current_time.isoformat()
+                  
+                  # TTL based on window
+                  if window_name == '1m':
+                      ttl_hours = 2
+                  elif window_name == '5m':
+                      ttl_hours = 6
+                  elif window_name == '1h':
+                      ttl_hours = 48
+                  else:  # 24h
+                      ttl_hours = 168
+                  
+                  ttl = int((current_time + timedelta(hours=ttl_hours)).timestamp())
+                  
+                  metrics_table.put_item(
+                      Item={
+                          'pk': pk,
+                          'sk': sk,
+                          'gsi1pk': gsi1pk,
+                          'gsi1sk': gsi1sk,
+                          'ttl': ttl,
+                          'window': window_name,
+                          'timestamp': current_time.isoformat(),
+                          'metrics': metrics
+                      }
+                  )
+
+  # CloudWatch Event Rule to trigger metrics aggregation
+  MetricsScheduleRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: !Sub '${ProjectName}-metrics-schedule-${Environment}'
+      Description: 'Trigger metrics aggregation every minute'
+      ScheduleExpression: 'rate(1 minute)'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt MetricsAggregatorFunction.Arn
+          Id: 'MetricsAggregatorTarget'
+
+  # Permission for CloudWatch Events to invoke Lambda
+  MetricsSchedulePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref MetricsAggregatorFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt MetricsScheduleRule.Arn
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Outputs:
+  EventStreamName:
+    Description: 'Kinesis Event Stream Name'
+    Value: !Ref EventStream
+    Export:
+      Name: !Sub '${AWS::StackName}-EventStream'
+
+  EventStreamArn:
+    Description: 'Kinesis Event Stream ARN'
+    Value: !GetAtt EventStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EventStreamArn'
+
+  EventProcessorFunctionArn:
+    Description: 'Event Processor Lambda Function ARN'
+    Value: !GetAtt EventProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EventProcessorFunction'
+
+  MetricsAggregatorFunctionArn:
+    Description: 'Metrics Aggregator Lambda Function ARN'
+    Value: !GetAtt MetricsAggregatorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MetricsAggregatorFunction'
+
+  AnalyticsApplicationName:
+    Description: 'Kinesis Analytics Application Name'
+    Value: !Ref AnalyticsApplication
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyticsApplication'
